@@ -299,7 +299,7 @@ app.post('/upload', upload.single('file'), async (req, res) => {
             { role: 'user', content: prompt }
           ];
 
-          const responseText = await translateWithModel('qwen_2', messages);
+          const responseText = await translateWithModel('openai', messages);
           // Change to openai, meta_1, meta_2, qwen_2_5, qwen_2, deepseek as needed
 
           const translations = parseTranslations(responseText);
