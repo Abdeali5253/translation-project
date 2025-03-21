@@ -204,6 +204,7 @@ import fs from 'fs/promises';
 import { port } from './config.js';
 import { readExcel, generateExcel } from './excelUtils.js';
 import { translateWithModel } from './aiClient.js';
+import { loadLexiconPrompts } from './lexiconUtils.js';
 
 const app = express();
 const __dirname = path.resolve();
@@ -212,6 +213,11 @@ app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
 const upload = multer({ dest: 'uploads/' });
+
+let lexiconPrompts = {};
+loadLexiconPrompts().then((loaded) => {
+  lexiconPrompts = loaded;
+});
 
 const generatePrompt = (texts) => {
   const formattedTexts = texts.map((text, i) => `${i + 1}. "${text}"`).join("\n");
@@ -232,6 +238,14 @@ const generatePrompt = (texts) => {
 إذا كان هناك تعبير مشترك بين أكثر من لهجة، فحافظ على الاتساق في الترجمة. وإلا، عدّل الترجمة بحيث تعكس كل لهجة بدقة.
 
 **مهم جدًا**: لا تُضف اسم اللهجة داخل الترجمة نفسها (مثل: "بالمصري" أو "باللهجة الأردنية"). فقط قدّم الترجمة مباشرة بدون مقدمات أو شروحات.
+
+${lexiconPrompts.msa || ''}
+${lexiconPrompts.emirati || ''}
+${lexiconPrompts.egyptian || ''}
+${lexiconPrompts.jordanian || ''}
+${lexiconPrompts.palestinian || ''}
+${lexiconPrompts.syrian || ''}
+${lexiconPrompts.lebanese || ''}
 
 ترجم النص التالي:
 
