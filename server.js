@@ -134,7 +134,6 @@
 //   }
 // };
 
-
 // /**
 //  * Handles file upload and translation
 //  */
@@ -194,33 +193,43 @@
 //   await open(`http://localhost:${port}`);
 // });
 
+import express from 'express'
+import multer from 'multer'
+import cors from 'cors'
+import open from 'open'
+import path from 'path'
+import fs from 'fs/promises'
+import EventEmitter from 'events'
+import { port } from './config.js'
+import { readExcel, generateExcel } from './excelUtils.js'
+import { translateWithModel } from './aiClient.js'
+import { loadLexiconPrompts } from './lexiconUtils.js'
 
-import express from 'express';
-import multer from 'multer';
-import cors from 'cors';
-import open from 'open';
-import path from 'path';
-import fs from 'fs/promises';
-import { port } from './config.js';
-import { readExcel, generateExcel } from './excelUtils.js';
-import { translateWithModel } from './aiClient.js';
-import { loadLexiconPrompts } from './lexiconUtils.js';
+const app = express()
+const __dirname = path.resolve()
 
-const app = express();
-const __dirname = path.resolve();
+app.use(cors())
+app.use(express.static(path.join(__dirname, 'public')))
 
-app.use(cors());
-app.use(express.static(path.join(__dirname, 'public')));
+const upload = multer({ dest: 'uploads/' })
 
-const upload = multer({ dest: 'uploads/' });
+const progressEmitter = new EventEmitter()
+let lastProgress = { message: 'Waiting...', value: 0 }
 
-let lexiconPrompts = {};
+const emitProgress = (message, value) => {
+  lastProgress = { message, value }
+  progressEmitter.emit('update', lastProgress)
+}
+
+let lexiconPrompts = {}
 loadLexiconPrompts().then((loaded) => {
-  lexiconPrompts = loaded;
-});
+  lexiconPrompts = loaded
+})
 
 const generatePrompt = (texts) => {
-  const formattedTexts = texts.map((text, i) => `${i + 1}. "${text}"`).join("\n");
+  const formattedTexts = texts
+    .map((text, i) => `${i + 1}. "${text}"`)
+    .join('\n')
 
   return `
 كمتخصص في كتابة المحتوى، النحو العربي، التراكيب اللغوية، والترجمة، مهمتك هي ترجمة النص الإنجليزي المُعطى إلى عدة لهجات عربية مع الحفاظ على المعنى الأصلي والسياق الكامل. يجب أن تكون الترجمة طبيعية، سلسة، ومناسبة ثقافيًا.
@@ -260,82 +269,109 @@ ${formattedTexts}
    **الفلسطينية**: [الترجمة]
    **السورية**: [الترجمة]
    **اللبنانية**: [الترجمة]
-`;
-};
+`
+}
 
 const parseTranslations = (text) => {
-  const blocks = text.trim().split(/\n\n+/);
+  const blocks = text.trim().split(/\n\n+/)
   return blocks.map((block) => {
-    const lines = block.split("\n");
+    const lines = block.split('\n')
     return {
-      msa: lines[0]?.replace("**العربية الفصحى**: ", "").trim(),
-      emirati: lines[1]?.replace("**الإماراتية**: ", "").trim(),
-      egyptian: lines[2]?.replace("**المصرية**: ", "").trim(),
-      jordanian: lines[3]?.replace("**الأردنية**: ", "").trim(),
-      palestinian: lines[4]?.replace("**الفلسطينية**: ", "").trim(),
-      syrian: lines[5]?.replace("**السورية**: ", "").trim(),
-      lebanese: lines[6]?.replace("**اللبنانية**: ", "").trim(),
-    };
-  });
-};
+      msa: lines[0]?.replace('**العربية الفصحى**: ', '').trim(),
+      emirati: lines[1]?.replace('**الإماراتية**: ', '').trim(),
+      egyptian: lines[2]?.replace('**المصرية**: ', '').trim(),
+      jordanian: lines[3]?.replace('**الأردنية**: ', '').trim(),
+      palestinian: lines[4]?.replace('**الفلسطينية**: ', '').trim(),
+      syrian: lines[5]?.replace('**السورية**: ', '').trim(),
+      lebanese: lines[6]?.replace('**اللبنانية**: ', '').trim(),
+    }
+  })
+}
+
+// Progress polling endpoint
+app.get('/progress', (req, res) => {
+  res.json(lastProgress)
+})
 
 app.post('/upload', upload.single('file'), async (req, res) => {
   try {
-    const inputFilePath = req.file.path;
-    const { headers, rows } = await readExcel(inputFilePath);
-    const batchSize = 8;
-    let batch = [];
-    let batchIndexes = [];
+    emitProgress('Uploading file...', 10)
+
+    const inputFilePath = req.file.path
+    const { headers, rows } = await readExcel(inputFilePath)
+
+    emitProgress('Reading Excel data...', 20)
+
+    const batchSize = 8
+    const totalBatches = Math.ceil(rows.length / batchSize)
+    let batch = []
+    let batchIndexes = []
+    let batchNum = 0
 
     for (let i = 0; i < rows.length; i++) {
       if (rows[i]['English']) {
-        batch.push(rows[i]['English']);
-        batchIndexes.push(i);
+        batch.push(rows[i]['English'])
+        batchIndexes.push(i)
 
         if (batch.length === batchSize || i === rows.length - 1) {
-          const prompt = generatePrompt(batch);
+          emitProgress(
+            `Translating batch ${batchNum + 1} of ${totalBatches}...`,
+            30 + Math.round((batchNum / totalBatches) * 50)
+          )
+
+          const prompt = generatePrompt(batch)
           const messages = [
             { role: 'system', content: 'أنت مساعد لغوي متخصص في الترجمة.' },
-            { role: 'user', content: prompt }
-          ];
+            { role: 'user', content: prompt },
+          ]
 
-          const responseText = await translateWithModel('openai', messages);
-          // Change to openai, meta_1, meta_2, qwen_2_5, qwen_2, deepseek as needed
-
-          const translations = parseTranslations(responseText);
+          const responseText = await translateWithModel('openai', messages)
+          // Change to openai, meta_1, meta_2,meta_3, qwen_2_5, qwen_2, deepseek as needed
+          const translations = parseTranslations(responseText)
 
           batchIndexes.forEach((index, j) => {
-            const tr = translations[j];
+            const tr = translations[j]
             if (tr) {
-              rows[index]['MSA'] = tr.msa;
-              rows[index]['Emirati'] = tr.emirati;
-              rows[index]['Egyptian'] = tr.egyptian;
-              rows[index]['Jordanian'] = tr.jordanian;
-              rows[index]['Palestinian'] = tr.palestinian;
-              rows[index]['Syrian'] = tr.syrian;
-              rows[index]['Lebanese'] = tr.lebanese;
+              rows[index]['MSA'] = tr.msa
+              rows[index]['Emirati'] = tr.emirati
+              rows[index]['Egyptian'] = tr.egyptian
+              rows[index]['Jordanian'] = tr.jordanian
+              rows[index]['Palestinian'] = tr.palestinian
+              rows[index]['Syrian'] = tr.syrian
+              rows[index]['Lebanese'] = tr.lebanese
             }
-          });
+          })
 
-          batch = [];
-          batchIndexes = [];
+          batch = []
+          batchIndexes = []
+          batchNum++
         }
       }
     }
 
-    const outputFilePath = await generateExcel(headers, rows, req.file.originalname);
+    emitProgress('Generating translated file...', 90)
+
+    const outputFilePath = await generateExcel(
+      headers,
+      rows,
+      req.file.originalname
+    )
+
+    emitProgress('Translation complete!', 100)
+
     res.download(outputFilePath, async (err) => {
-      if (err) console.error('Error sending file:', err);
-      await fs.unlink(inputFilePath);
-      await fs.unlink(outputFilePath);
-    });
+      if (err) console.error('Error sending file:', err)
+      await fs.unlink(inputFilePath)
+      await fs.unlink(outputFilePath)
+    })
   } catch (err) {
-    console.error('❌ Error processing file:', err.message);
-    res.status(500).send('Server error');
+    console.error('❌ Error processing file:', err.message)
+    emitProgress('Error during processing.', 0)
+    res.status(500).send('Server error')
   }
-});
+})
 
 app.listen(port, async () => {
-  console.log(`🚀 Server running at http://localhost:${port}`);
-  await open(`http://localhost:${port}`);
-});
+  console.log(`🚀 Server running at http://localhost:${port}`)
+  await open(`http://localhost:${port}`)
+})

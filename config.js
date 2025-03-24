@@ -18,6 +18,10 @@ export const modelConfigs = {
     apiKey: process.env.META_2_API_KEY,
     model: process.env.META_2_MODEL,
   },
+  meta_3: {
+    apiKey: process.env.META_3_API_KEY,
+    model: process.env.META_3_MODEL,
+  },
   qwen_2_5: {
     apiKey: process.env.QWEN_2_5_API_KEY,
     model: process.env.QWEN_2_5_MODEL,

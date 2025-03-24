@@ -2,7 +2,7 @@ import fetch from 'node-fetch';
 import OpenAI from 'openai';
 import { baseUrl, modelConfigs } from './config.js';
 
-const openai = new OpenAI({ apiKey: modelConfigs.openai.apiKey });
+const openai = new OpenAI({ apiKey: modelConfigs.openai.apiKey , baseUrl: baseUrl});
 
 export const translateWithModel = async (modelName, messages) => {
   const config = modelConfigs[modelName];

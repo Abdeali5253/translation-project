@@ -12,10 +12,17 @@
       <input type="file" id="fileInput" accept=".xlsx" />
       <button id="uploadBtn">Upload & Translate</button>
 
-      <div id="progressContainer">
+      <div id="progressContainer" style="display: none; margin-top: 20px">
         <p id="progressText">Waiting for upload...</p>
-        <progress id="progressBar" value="0" max="100"></progress>
+        <progress
+          id="progressBar"
+          value="0"
+          max="100"
+          style="width: 100%"
+        ></progress>
       </div>
+
+      <div id="liveProgress" style="margin-top: 15px; font-weight: bold"></div>
 
       <a id="downloadLink" style="display: none" download
         >Download Translated File</a

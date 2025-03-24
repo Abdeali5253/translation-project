@@ -1,9 +1,28 @@
-document.getElementById('uploadBtn').addEventListener('click', async () => {
-  const fileInput = document.getElementById('fileInput')
-  const progressText = document.getElementById('progressText')
-  const progressBar = document.getElementById('progressBar')
-  const downloadLink = document.getElementById('downloadLink')
+const uploadBtn = document.getElementById('uploadBtn')
+const fileInput = document.getElementById('fileInput')
+const progressText = document.getElementById('progressText')
+const progressBar = document.getElementById('progressBar')
+const downloadLink = document.getElementById('downloadLink')
+const liveProgress = document.getElementById('liveProgress')
 
+let progressInterval
+
+const pollProgress = async () => {
+  try {
+    const res = await fetch('http://localhost:3000/progress')
+    const data = await res.json()
+    if (liveProgress) {
+      liveProgress.textContent = `${data.message} (${data.value}%)`
+    }
+    if (progressBar) {
+      progressBar.value = data.value
+    }
+  } catch (err) {
+    console.error('Failed to poll progress:', err)
+  }
+}
+
+uploadBtn.addEventListener('click', async () => {
   if (!fileInput.files.length) {
     alert('Please select a file!')
     return
@@ -13,13 +32,14 @@ document.getElementById('uploadBtn').addEventListener('click', async () => {
   const formData = new FormData()
   formData.append('file', file)
 
-  // Show progress UI
   document.getElementById('progressContainer').style.display = 'block'
-  progressText.textContent = 'Uploading file...'
+  progressText.textContent = 'Uploading...'
   progressBar.value = 10
+  liveProgress.textContent = 'Preparing upload...'
+
+  progressInterval = setInterval(pollProgress, 1000)
 
   try {
-    // Upload file to backend
     const response = await fetch('http://localhost:3000/upload', {
       method: 'POST',
       body: formData,
@@ -27,23 +47,20 @@ document.getElementById('uploadBtn').addEventListener('click', async () => {
 
     if (!response.ok) throw new Error('File processing failed')
 
-    progressText.textContent = 'Translation in progress...'
-    progressBar.value = 50
-
-    // Wait for the translated file
     const blob = await response.blob()
     const fileURL = window.URL.createObjectURL(blob)
 
-    // Show download link
     downloadLink.href = fileURL
     downloadLink.style.display = 'block'
     downloadLink.textContent = 'Download Translated File'
     downloadLink.setAttribute('download', 'translated.xlsx')
 
-    progressText.textContent = 'Translation Complete!'
-    progressBar.value = 100
+    clearInterval(progressInterval)
+    await pollProgress() // Final progress update
   } catch (error) {
     console.error('Error:', error)
     progressText.textContent = 'Error processing file'
+    liveProgress.textContent = 'Something went wrong.'
+    clearInterval(progressInterval)
   }
 })
