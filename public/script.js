@@ -28,15 +28,24 @@ uploadBtn.addEventListener('click', async () => {
     return
   }
 
+  // Reset UI before starting new upload
+  document.getElementById('progressContainer').style.display = 'block'
+  progressText.textContent = 'Uploading...'
+  progressBar.value = 0
+  liveProgress.textContent = ''
+  downloadLink.style.display = 'none'
+  downloadLink.href = ''
+  downloadLink.textContent = ''
+
+  // Disable upload button and show busy text
+  uploadBtn.disabled = true
+  uploadBtn.textContent = 'Translating...'
+
   const file = fileInput.files[0]
   const formData = new FormData()
   formData.append('file', file)
 
-  document.getElementById('progressContainer').style.display = 'block'
-  progressText.textContent = 'Uploading...'
-  progressBar.value = 10
-  liveProgress.textContent = 'Preparing upload...'
-
+  if (progressInterval) clearInterval(progressInterval)
   progressInterval = setInterval(pollProgress, 1000)
 
   try {
@@ -56,11 +65,14 @@ uploadBtn.addEventListener('click', async () => {
     downloadLink.setAttribute('download', 'translated.xlsx')
 
     clearInterval(progressInterval)
-    await pollProgress() // Final progress update
+    await pollProgress() // Final update
   } catch (error) {
     console.error('Error:', error)
     progressText.textContent = 'Error processing file'
     liveProgress.textContent = 'Something went wrong.'
     clearInterval(progressInterval)
+  } finally {
+    uploadBtn.disabled = false
+    uploadBtn.textContent = 'Upload & Translate'
   }
 })
