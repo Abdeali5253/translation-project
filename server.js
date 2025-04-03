@@ -1,4 +1,3 @@
-
 import express from 'express'
 import multer from 'multer'
 import cors from 'cors'
@@ -131,7 +130,7 @@ app.post('/upload', upload.single('file'), async (req, res) => {
             { role: 'user', content: prompt },
           ]
 
-          const responseText = await translateWithModel('qwen_2', messages)
+          const responseText = await translateWithModel('openai', messages)
           // Change to openai, meta_1, meta_2,meta_3, qwen_2_5, qwen_2, deepseek as needed
           const translations = parseTranslations(responseText)
 
