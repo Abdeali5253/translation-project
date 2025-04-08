@@ -220,11 +220,11 @@ const emitProgress = (message, value) => {
   logToFile(`Progress update: ${message} (${value}%)`)
 }
 
-// let lexiconPrompts = {}
-// loadLexiconPrompts().then((loaded) => {
-//   lexiconPrompts = loaded
-//   logToFile('Lexicon prompts loaded.')
-// })
+let lexiconPrompts = {}
+loadLexiconPrompts().then((loaded) => {
+  lexiconPrompts = loaded
+  logToFile('Lexicon prompts loaded.')
+})
 
 const generatePrompt = (texts) => {
   const formattedTexts = texts
@@ -247,6 +247,14 @@ const generatePrompt = (texts) => {
 إذا كان هناك تعبير مشترك بين أكثر من لهجة، فحافظ على الاتساق في الترجمة. وإلا، عدّل الترجمة بحيث تعكس كل لهجة بدقة.
 
 **مهم جدًا**: لا تُضف اسم اللهجة داخل الترجمة نفسها (مثل: "بالمصري" أو "باللهجة الأردنية"). فقط قدّم الترجمة مباشرة بدون مقدمات أو شروحات.
+
+${lexiconPrompts.msa || ''}
+${lexiconPrompts.emirati || ''}
+${lexiconPrompts.egyptian || ''}
+${lexiconPrompts.jordanian || ''}
+${lexiconPrompts.palestinian || ''}
+${lexiconPrompts.syrian || ''}
+${lexiconPrompts.lebanese || ''}
 
 ترجم النص التالي:
 

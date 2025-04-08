@@ -34,4 +34,8 @@ export const modelConfigs = {
     apiKey: process.env.DEEPSEEK_API_KEY,
     model: process.env.DEEPSEEK_MODEL,
   },
+  mistral: {
+    apiKey: process.env.MISTRAL_API_KEY, 
+    model: process.env.MISTRAL_MODEL,
+  },
 };
