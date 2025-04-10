@@ -438,6 +438,11 @@ Promise.all([
     logToFile('Instruction prompts loaded.')
   }),
 ])
+let lexiconPrompts = {}
+loadLexiconPrompts().then((loaded) => {
+  lexiconPrompts = loaded
+  logToFile('Lexicon prompts loaded.')
+})
 
 const generatePrompt = (texts) => {
   const formattedTexts = texts
@@ -465,6 +470,14 @@ const generatePrompt = (texts) => {
 كمتخصص في كتابة المحتوى، النحو العربي، التراكيب اللغوية، والترجمة، مهمتك هي ترجمة النص الإنجليزي المُعطى إلى عدة لهجات عربية مع الحفاظ على المعنى الأصلي والسياق الكامل. يجب أن تكون الترجمة طبيعية، سلسة، ومناسبة ثقافيًا.
 
 ${dialectBlocks}
+
+${lexiconPrompts.msa || ''}
+${lexiconPrompts.emirati || ''}
+${lexiconPrompts.egyptian || ''}
+${lexiconPrompts.jordanian || ''}
+${lexiconPrompts.palestinian || ''}
+${lexiconPrompts.syrian || ''}
+${lexiconPrompts.lebanese || ''}
 
 ترجم النص التالي:
 
