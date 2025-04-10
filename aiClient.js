@@ -55,11 +55,18 @@ export const translateWithModel = async (modelName, messages) => {
 
   // OpenAI case
   if (config.isOpenAI) {
-    const response = await openai.chat.completions.create({
-      model: config.model,
-      messages,
-    })
-    return response.choices[0].message.content.trim()
+    try {
+      const response = await openai.chat.completions.create({
+        model: config.model,
+        messages,
+      })
+
+      console.log('OpenAI API Response:', response) // Log the full response
+      return response.choices[0].message.content.trim()
+    } catch (error) {
+      console.error('Error calling OpenAI API:', error) // Log errors for OpenAI
+      throw error
+    }
   }
 
   // Mistral case (direct API call)
@@ -75,30 +82,78 @@ export const translateWithModel = async (modelName, messages) => {
           },
           body: JSON.stringify({
             model: config.model,
-            messages: messages, // Ensure messages are passed correctly
-            temperature: 0.7, // Adjust if needed
-            top_p: 1, // Adjust if needed
-            max_tokens: 150, // Example: limit the output length
-            stream: false, // Stream response or not
+            messages: messages,
+            temperature: 0.7,
+            top_p: 1,
+            stream: false,
           }),
         }
       )
 
       if (!response.ok) {
-        const errorDetails = await response.json() // Log detailed error response
-        console.error('Mistral API Error:', errorDetails) // Log API error details
+        const errorDetails = await response.json()
+        console.error('Mistral API Error:', errorDetails) // Log Mistral API error details
         throw new Error(`Mistral API error: ${response.statusText}`)
       }
 
       const result = await response.json()
+      console.log('Mistral API Response:', result) // Log the full Mistral response
+      if (
+        !result.choices ||
+        !Array.isArray(result.choices) ||
+        result.choices.length === 0
+      ) {
+        console.error('Mistral API Error: No choices returned:', result)
+        throw new Error('No choices returned from Mistral API')
+      }
+
       return result.choices[0].message.content.trim()
     } catch (error) {
-      console.error('Error calling Mistral API:', error) // Log any unexpected errors
-      throw error // Re-throw error after logging it
+      console.error('Error calling Mistral API:', error) // Log Mistral API errors
+      throw error
     }
   }
 
-  // Default: Other models via baseUrl (Meta, Qwen, etc.)
+  // Qwen case (direct API call for Qwen models)
+  if (modelName.startsWith('qwen')) {
+    try {
+      const response = await fetch(`${baseUrl}chat/completions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${config.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: config.model,
+          messages,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorDetails = await response.json()
+        console.error('Qwen API Error:', errorDetails) // Log Qwen API error details
+        throw new Error(`Qwen API error: ${response.statusText}`)
+      }
+
+      const result = await response.json()
+      console.log('Qwen API Response:', result) // Log the full Qwen response
+      if (
+        !result.choices ||
+        !Array.isArray(result.choices) ||
+        result.choices.length === 0
+      ) {
+        console.error('Qwen API Error: No choices returned:', result)
+        throw new Error('No choices returned from Qwen API')
+      }
+
+      return result.choices[0].message.content.trim()
+    } catch (error) {
+      console.error('Error calling Qwen API:', error) // Log Qwen API errors
+      throw error
+    }
+  }
+
+  // Default: Other models via baseUrl (Meta, DeepSeek, etc.)
   const response = await fetch(`${baseUrl}chat/completions`, {
     method: 'POST',
     headers: {
@@ -112,9 +167,21 @@ export const translateWithModel = async (modelName, messages) => {
   })
 
   if (!response.ok) {
+    const errorDetails = await response.json()
+    console.error(`${modelName} API Error:`, errorDetails) // Log error details for other models
     throw new Error(`API error (${modelName}): ${response.statusText}`)
   }
 
   const result = await response.json()
+  console.log(`${modelName} API Response:`, result) // Log the full response
+  if (
+    !result.choices ||
+    !Array.isArray(result.choices) ||
+    result.choices.length === 0
+  ) {
+    console.error(`${modelName} API Error: No choices returned:`, result)
+    throw new Error(`No choices returned for model ${modelName}`)
+  }
+
   return result.choices[0].message.content.trim()
 }
