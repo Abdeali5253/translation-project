@@ -502,8 +502,89 @@ app.get('/progress', (req, res) => {
   res.json(lastProgress)
 })
 
+// app.post('/upload', upload.single('file'), async (req, res) => {
+//   try {
+//     emitProgress('Uploading file...', 10)
+//     const inputFilePath = req.file.path
+//     const { headers, rows } = await readExcel(inputFilePath)
+//     emitProgress('Reading Excel data...', 20)
+
+//     const batchSize = 8
+//     const totalBatches = Math.ceil(rows.length / batchSize)
+//     let batch = []
+//     let batchIndexes = []
+//     let batchNum = 0
+
+//     for (let i = 0; i < rows.length; i++) {
+//       if (rows[i]['English']) {
+//         batch.push(rows[i]['English'])
+//         batchIndexes.push(i)
+
+//         if (batch.length === batchSize || i === rows.length - 1) {
+//           emitProgress(
+//             `Translating batch ${batchNum + 1} of ${totalBatches}...`,
+//             30 + Math.round((batchNum / totalBatches) * 50)
+//           )
+//           const prompt = generatePrompt(batch)
+//           await logToFile(`Generated Prompt:\n${prompt}`)
+
+//           const messages = [
+//             { role: 'system', content: 'أنت مساعد لغوي متخصص في الترجمة.' },
+//             { role: 'user', content: prompt },
+//           ]
+//           await logToFile(`Messages:\n${JSON.stringify(messages, null, 2)}`)
+
+//           const responseText = await translateWithModel('openai', messages)
+//           await logToFile(`API Response:\n${responseText}`)
+
+//           const translations = parseTranslations(responseText)
+//           batchIndexes.forEach((index, j) => {
+//             const tr = translations[j]
+//             if (tr) {
+//               rows[index]['MSA'] = tr.msa
+//               rows[index]['Emirati'] = tr.emirati
+//               rows[index]['Egyptian'] = tr.egyptian
+//               rows[index]['Jordanian'] = tr.jordanian
+//               rows[index]['Palestinian'] = tr.palestinian
+//               rows[index]['Syrian'] = tr.syrian
+//               rows[index]['Lebanese'] = tr.lebanese
+//             }
+//           })
+
+//           batch = []
+//           batchIndexes = []
+//           batchNum++
+//         }
+//       }
+//     }
+
+//     emitProgress('Generating translated file...', 90)
+//     const outputFilePath = await generateExcel(
+//       headers,
+//       rows,
+//       req.file.originalname
+//     )
+//     emitProgress('Translation complete!', 100)
+
+//     res.download(outputFilePath, async (err) => {
+//       if (err) {
+//         console.error('Error sending file:', err)
+//         await logToFile(`Error sending file: ${err}`)
+//       }
+//       await fs.unlink(inputFilePath)
+//       await fs.unlink(outputFilePath)
+//     })
+//   } catch (err) {
+//     console.error('❌ Error processing file:', err.message)
+//     await logToFile(`Error processing file: ${err.message}`)
+//     emitProgress('Error during processing.', 0)
+//     res.status(500).send('Server error')
+//   }
+// })
+
 app.post('/upload', upload.single('file'), async (req, res) => {
   try {
+    const selectedModel = req.body.model // Get the selected model from UI
     emitProgress('Uploading file...', 10)
     const inputFilePath = req.file.path
     const { headers, rows } = await readExcel(inputFilePath)
@@ -534,7 +615,7 @@ app.post('/upload', upload.single('file'), async (req, res) => {
           ]
           await logToFile(`Messages:\n${JSON.stringify(messages, null, 2)}`)
 
-          const responseText = await translateWithModel('openai', messages)
+          const responseText = await translateWithModel(selectedModel, messages) // Use the selected model
           await logToFile(`API Response:\n${responseText}`)
 
           const translations = parseTranslations(responseText)

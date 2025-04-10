@@ -42,14 +42,15 @@
 
 import fetch from 'node-fetch'
 import OpenAI from 'openai'
-import { MistralClient } from '@mistralai/mistralai'
+import pkg from '@mistralai/mistralai' // Default import
+const { Mistral } = pkg // Directly access MistralClient from the imported pkg
 import { baseUrl, modelConfigs } from './config.js'
 
 const openai = new OpenAI({ apiKey: modelConfigs.openai.apiKey, baseUrl })
 
 // Prepare Mistral client only if config is present
 const mistralClient = modelConfigs.mistral?.apiKey
-  ? new MistralClient({ apiKey: modelConfigs.mistral.apiKey })
+  ? new Mistral({ apiKey: modelConfigs.mistral.apiKey })
   : null
 
 export const translateWithModel = async (modelName, messages) => {
