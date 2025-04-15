@@ -4,6 +4,7 @@
 // const progressBar = document.getElementById('progressBar')
 // const downloadLink = document.getElementById('downloadLink')
 // const liveProgress = document.getElementById('liveProgress')
+// const modelSelect = document.getElementById('modelSelect') // Select element for model
 
 // let progressInterval
 
@@ -28,6 +29,9 @@
 //     return
 //   }
 
+//   // Get the selected model
+//   const selectedModel = modelSelect.value
+
 //   // Reset UI before starting new upload
 //   document.getElementById('progressContainer').style.display = 'block'
 //   progressText.textContent = 'Uploading...'
@@ -41,9 +45,13 @@
 //   uploadBtn.disabled = true
 //   uploadBtn.textContent = 'Translating...'
 
+//   // Lock the model dropdown once the translation begins
+//   modelSelect.disabled = true
+
 //   const file = fileInput.files[0]
 //   const formData = new FormData()
 //   formData.append('file', file)
+//   formData.append('model', selectedModel) // Send the selected model
 
 //   if (progressInterval) clearInterval(progressInterval)
 //   progressInterval = setInterval(pollProgress, 1000)
@@ -64,8 +72,9 @@
 //     downloadLink.textContent = 'Download Translated File'
 //     downloadLink.setAttribute('download', 'translated.xlsx')
 
-//     clearInterval(progressInterval)
-//     await pollProgress() // Final update
+//     clearInterval(progressInterval) // Clear the polling interval
+//     progressBar.value = 100 // Ensure progress reaches 100%
+//     liveProgress.textContent = 'Translation complete! (100%)' // Update live progress
 //   } catch (error) {
 //     console.error('Error:', error)
 //     progressText.textContent = 'Error processing file'
@@ -74,8 +83,10 @@
 //   } finally {
 //     uploadBtn.disabled = false
 //     uploadBtn.textContent = 'Upload & Translate'
+//     modelSelect.disabled = false // Re-enable the dropdown after translation is done
 //   }
 // })
+
 
 const uploadBtn = document.getElementById('uploadBtn')
 const fileInput = document.getElementById('fileInput')
@@ -84,6 +95,7 @@ const progressBar = document.getElementById('progressBar')
 const downloadLink = document.getElementById('downloadLink')
 const liveProgress = document.getElementById('liveProgress')
 const modelSelect = document.getElementById('modelSelect') // Select element for model
+const translationModeSelect = document.getElementById('translationMode') // Select element for translation mode
 
 let progressInterval
 
@@ -108,17 +120,18 @@ uploadBtn.addEventListener('click', async () => {
     return
   }
 
-  // Get the selected model
+  // Get the selected model and translation mode
   const selectedModel = modelSelect.value
+  const selectedTranslationMode = translationModeSelect.value
 
   // Reset UI before starting new upload
-  document.getElementById('progressContainer').style.display = 'block'
-  progressText.textContent = 'Uploading...'
-  progressBar.value = 0
-  liveProgress.textContent = ''
-  downloadLink.style.display = 'none'
-  downloadLink.href = ''
-  downloadLink.textContent = ''
+    // document.getElementById('progressContainer').style.display = 'block'
+    // progressText.textContent = 'Uploading...'
+    progressBar.value = 0
+    liveProgress.textContent = ''
+    downloadLink.style.display = 'none'
+    downloadLink.href = ''
+    downloadLink.textContent = ''
 
   // Disable upload button and show busy text
   uploadBtn.disabled = true
@@ -126,11 +139,13 @@ uploadBtn.addEventListener('click', async () => {
 
   // Lock the model dropdown once the translation begins
   modelSelect.disabled = true
+  translationModeSelect.disabled = true
 
   const file = fileInput.files[0]
   const formData = new FormData()
   formData.append('file', file)
   formData.append('model', selectedModel) // Send the selected model
+  formData.append('translationMode', selectedTranslationMode) // Send the selected translation mode
 
   if (progressInterval) clearInterval(progressInterval)
   progressInterval = setInterval(pollProgress, 1000)
@@ -163,5 +178,6 @@ uploadBtn.addEventListener('click', async () => {
     uploadBtn.disabled = false
     uploadBtn.textContent = 'Upload & Translate'
     modelSelect.disabled = false // Re-enable the dropdown after translation is done
+    translationModeSelect.disabled = false // Re-enable the dropdown after translation is done
   }
 })
