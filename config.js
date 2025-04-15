@@ -2,7 +2,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 export const port = process.env.PORT || 3000;
-export const baseUrl = process.env.BASE_URL;
+export const baseUrlProd = process.env.BASE_URL_PROD;
+export const baseUrlDev = process.env.BASE_URL_DEV
 
 export const modelConfigs = {
   openai: {
@@ -34,8 +35,12 @@ export const modelConfigs = {
     apiKey: process.env.DEEPSEEK_API_KEY,
     model: process.env.DEEPSEEK_MODEL,
   },
-  mistral: {
-    apiKey: process.env.MISTRAL_API_KEY, 
-    model: process.env.MISTRAL_MODEL,
+  mistral_1: {
+    apiKey: process.env.MISTRAL_1_API_KEY, 
+    model: process.env.MISTRAL_1_MODEL,
+  },
+  mistral_2: {
+    apiKey: process.env.MISTRAL_2_API_KEY, 
+    model: process.env.MISTRAL_2_MODEL,
   },
 };
