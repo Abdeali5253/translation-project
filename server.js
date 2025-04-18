@@ -200,139 +200,155 @@
 //   await open(`http://localhost:${port}`)
 // })
 
-import express from 'express';
-import multer from 'multer';
-import cors from 'cors';
-import open from 'open';
-import path from 'path';
-import fs from 'fs/promises';
-import EventEmitter from 'events';
-import { port } from './config.js';
-import { readExcel, generateExcel } from './excelUtils.js';
-import { translateWithModel } from './aiClient.js';
-import { loadLexiconPrompts, loadInstructionPrompts } from './lexiconUtils.js';
+import express from 'express'
+import multer from 'multer'
+import cors from 'cors'
+import open from 'open'
+import path from 'path'
+import fs from 'fs/promises'
+import EventEmitter from 'events'
+import { port } from './config.js'
+import { readExcel, generateExcel, parseDialectResponse } from './excelUtils.js'
+import { translateWithModel } from './aiClient.js'
+import { loadLexiconPrompts, loadInstructionPrompts } from './lexiconUtils.js'
 
-const app = express();
-const __dirname = path.resolve();
-app.use(cors());
-app.use(express.static(path.join(__dirname, 'public')));
-const upload = multer({ dest: 'uploads/' });
+const app = express()
+const __dirname = path.resolve()
+app.use(cors())
+app.use(express.static(path.join(__dirname, 'public')))
+const upload = multer({ dest: 'uploads/' })
 
-const progressEmitter = new EventEmitter();
-let lastProgress = { message: 'Waiting...', value: 0 };
+const progressEmitter = new EventEmitter()
+let lastProgress = { message: 'Waiting...', value: 0 }
 
-const logFilePath = path.join(__dirname, 'server.log');
+const logFilePath = path.join(__dirname, 'server.log')
 const logToFile = async (message) => {
-  const timestamp = new Date().toISOString();
+  const timestamp = new Date().toISOString()
   try {
-    await fs.appendFile(logFilePath, `[${timestamp}] ${message}\n`);
+    await fs.appendFile(logFilePath, `[${timestamp}] ${message}\n`)
   } catch (err) {
-    console.error('Error writing log:', err);
+    console.error('Error writing log:', err)
   }
-};
+}
 
 const emitProgress = (message, value) => {
-  lastProgress = { message, value };
-  progressEmitter.emit('update', lastProgress);
-  logToFile(`Progress update: ${message} (${value}%)`);
-};
+  lastProgress = { message, value }
+  progressEmitter.emit('update', lastProgress)
+  logToFile(`Progress update: ${message} (${value}%)`)
+}
 
 // Load prompts for MSA and selected dialects
-let lexiconPrompts = {};
-let instructionPrompts = {};
+let lexiconPrompts = {}
+let instructionPrompts = {}
 Promise.all([
   loadLexiconPrompts(['emirati', 'egyptian', 'jordanian']).then((loaded) => {
-    lexiconPrompts = loaded;
-    logToFile('Lexicon prompts loaded.');
+    lexiconPrompts = loaded
+    logToFile('Lexicon prompts loaded.')
   }),
   loadInstructionPrompts().then((loaded) => {
-    instructionPrompts = loaded;
-    logToFile('Instruction prompts loaded.');
+    instructionPrompts = loaded
+    logToFile('Instruction prompts loaded.')
   }),
-]);
+])
 
 const generatePrompt = (text, dialect) => {
-  const dialectBlock = `${instructionPrompts[dialect] || ''}\n\n${lexiconPrompts[dialect] || ''}`;
+  const dialectBlock = `${lexiconPrompts[dialect] || ''}\n\n${
+    instructionPrompts[dialect] || ''
+  }`
   return `
-Translate the following text to ${dialect} while ensuring the translation sounds natural and culturally relevant:
 
 ${dialectBlock}
 
-Translate the following text:
-
 "${text}"
-`;
-};
+
+`
+}
 
 const parseTranslations = (text) => {
-  console.log('Parsing the response text:', text);  // Debug log
-  const blocks = text.trim().split(/\n\n+/);
+  console.log('Parsing the response text:', text) // Debug log
+  const blocks = text.trim().split(/\n\n+/)
   return blocks.map((block) => {
-    const lines = block.split('\n');
+    const lines = block.split('\n')
     return {
-      msa: lines.find(line => line.startsWith('العربية الفصحى'))?.replace('**العربية الفصحى**: ', '').trim() || '',
-      emirati: lines.find(line => line.startsWith('الإماراتية'))?.replace('**الإماراتية**: ', '').trim() || '',
-      egyptian: lines.find(line => line.startsWith('المصرية'))?.replace('**المصرية**: ', '').trim() || '',
-      jordanian: lines.find(line => line.startsWith('الأردنية'))?.replace('**الأردنية**: ', '').trim() || '',
-    };
-  });
-};
+      msa:
+        lines
+          .find((line) => line.includes('العربية الفصحى'))
+          ?.replace('**العربية الفصحى**: ', '')
+          .trim() || '',
+      emirati:
+        lines
+          .find((line) => line.includes('الإماراتية'))
+          ?.replace('**الإماراتية**: ', '')
+          .trim() || '',
+      egyptian:
+        lines
+          .find((line) => line.includes('المصرية'))
+          ?.replace('**المصرية**: ', '')
+          .trim() || '',
+      jordanian:
+        lines
+          .find((line) => line.includes('الأردنية'))
+          ?.replace('**الأردنية**: ', '')
+          .trim() || '',
+    }
+  })
+}
 
 app.get('/progress', (req, res) => {
-  res.json(lastProgress);
-});
+  res.json(lastProgress)
+})
 
 app.post('/upload', upload.single('file'), async (req, res) => {
   try {
-    const selectedModel = req.body.model;
-    const translationMode = req.body.translationMode;
-    emitProgress('Uploading file...', 10);
-    const inputFilePath = req.file.path;
-    const { headers, rows } = await readExcel(inputFilePath);
-    emitProgress('Reading Excel data...', 20);
+    const selectedModel = req.body.model
+    const translationMode = req.body.translationMode
+    emitProgress('Uploading file...', 10)
+    const inputFilePath = req.file.path
+    const { headers, rows } = await readExcel(inputFilePath)
+    emitProgress('Reading Excel data...', 20)
 
-    console.log('Excel Rows:', rows);  // Log rows to verify data
+    console.log('Excel Rows:', rows) // Log rows to verify data
 
-    const batchSize = 8;
-    const totalBatches = Math.ceil(rows.length / batchSize);
-    let batch = [];
-    let batchIndexes = [];
-    let batchNum = 0;
+    const batchSize = 8
+    const totalBatches = Math.ceil(rows.length / batchSize)
+    let batch = []
+    let batchIndexes = []
+    let batchNum = 0
 
     if (translationMode === 'english_to_msa') {
       // Translate from English to MSA
       for (let i = 0; i < rows.length; i++) {
         if (rows[i]['English']) {
-          batch.push(rows[i]['English']);
-          batchIndexes.push(i);
+          batch.push(rows[i]['English'])
+          batchIndexes.push(i)
 
           if (batch.length === batchSize || i === rows.length - 1) {
             emitProgress(
               `Translating batch ${batchNum + 1} of ${totalBatches}...`,
               30 + Math.round((batchNum / totalBatches) * 50)
-            );
+            )
 
-            const promptMSA = generatePrompt(batch.join('\n'), 'msa');
-            await logToFile(`Generated MSA Prompt:\n${promptMSA}`);
-            console.log('Generated MSA Prompt:', promptMSA);  // Debug log
+            const promptMSA = generatePrompt(batch.join('\n'), 'msa')
+            await logToFile(`Generated MSA Prompt:\n${promptMSA}`)
+            console.log('Generated MSA Prompt:', promptMSA) // Debug log
 
-            const responseMSA = await translateWithModel(selectedModel, [{ role: 'user', content: promptMSA }]);
-            await logToFile(`MSA API Response:\n${responseMSA}`);
-            console.log('MSA API Response:', responseMSA);  // Debug log
+            const responseMSA = await translateWithModel(selectedModel, [
+              { role: 'user', content: promptMSA },
+            ])
+            await logToFile(`MSA API Response:\n${responseMSA}`)
+            console.log('MSA API Response:', responseMSA) // Debug log
 
             if (!responseMSA || responseMSA.trim() === '') {
-              console.error('No response received for MSA translation.');
-              throw new Error('No response received for MSA translation.');
+              console.error('No response received for MSA translation.')
+              throw new Error('No response received for MSA translation.')
             }
 
-            const msaTranslations = parseTranslations(responseMSA);
-            rows[batchIndexes[0]]['MSA'] = msaTranslations.msa;
-            
-            const outputFilePath = await generateExcel(headers, rows, req.file.originalname, translationMode);
+            const msaTranslations = parseTranslations(responseMSA)
+            rows[batchIndexes[0]]['MSA'] = msaTranslations.msa
 
-            batch = [];
-            batchIndexes = [];
-            batchNum++;
+            batch = []
+            batchIndexes = []
+            batchNum++
           }
         }
       }
@@ -340,52 +356,62 @@ app.post('/upload', upload.single('file'), async (req, res) => {
       // Translate MSA to other dialects (Emirati, Egyptian, Jordanian)
       for (let i = 0; i < rows.length; i++) {
         if (rows[i]['MSA']) {
-          const msaText = rows[i]['MSA'];
-          const batchIndexes = [i];
+          const msaText = rows[i]['MSA']
+          const batchIndexes = [i]
           for (const dialect of ['emirati', 'egyptian', 'jordanian']) {
-            const prompt = generatePrompt(msaText, dialect);
-            await logToFile(`Generated ${dialect} Prompt:\n${prompt}`);
-            console.log(`Generated ${dialect} Prompt:`, prompt);  // Debug log
-
-            const response = await translateWithModel(selectedModel, [{ role: 'user', content: prompt }]);
-            await logToFile(`${dialect} API Response:\n${response}`);
-            console.log(`${dialect} API Response:`, response);  // Debug log
+            const prompt = generatePrompt(msaText, dialect)
+            //await logToFile(`Generated ${dialect} Prompt:\n${prompt}`)
+            console.log(`Generated ${dialect} Prompt:`, prompt) // Debug log
+            await logToFile(`${dialect} Generated Prompt:\n ${prompt}`)
+            const response = await translateWithModel(selectedModel, [
+              { role: 'user', content: prompt },
+            ])
+            await logToFile(`${dialect} API Response:\n${response}`)
+            console.log(`${dialect} API Response:`, response) // Debug log
 
             if (!response || response.trim() === '') {
-              console.error(`No response received for ${dialect} translation.`);
-              throw new Error(`No response received for ${dialect} translation.`);
+              console.error(`No response received for ${dialect} translation.`)
+              throw new Error(
+                `No response received for ${dialect} translation.`
+              )
             }
 
-            const dialectTranslation = parseTranslations(response);
-            rows[batchIndexes[0]][dialect] = dialectTranslation[dialect] || 'No translation';
+            const dialectTranslation = parseTranslations(response)
+            rows[batchIndexes[0]][dialect] =
+              dialectTranslation[dialect] || 'No translation'
           }
         }
       }
     }
 
-    emitProgress('Generating translated file...', 90);
-    const outputFilePath = await generateExcel(headers, rows, req.file.originalname, translationMode);
-    emitProgress('Translation complete!', 100);
+    emitProgress('Generating translated file...', 90)
+    const outputFilePath = await generateExcel(
+      headers,
+      rows,
+      req.file.originalname,
+      translationMode
+    )
+    emitProgress('Translation complete!', 100)
 
     res.download(outputFilePath, async (err) => {
       if (err) {
-        console.error('Error sending file:', err);
-        await logToFile(`Error sending file: ${err}`);
+        console.error('Error sending file:', err)
+        await logToFile(`Error sending file: ${err}`)
       }
-      await fs.unlink(inputFilePath);
-      await fs.unlink(outputFilePath);
-    });
+      await fs.unlink(inputFilePath)
+      await fs.unlink(outputFilePath)
+    })
   } catch (err) {
-    console.error('❌ Error processing file:', err.message);
-    await logToFile(`Error processing file: ${err.message}`);
-    emitProgress('Error during processing.', 0);
-    res.status(500).send('Server error');
+    console.error('❌ Error processing file:', err.message)
+    await logToFile(`Error processing file: ${err.message}`)
+    emitProgress('Error during processing.', 0)
+    res.status(500).send('Server error')
   }
-});
+})
 
 app.listen(port, async () => {
-  const msg = `🚀 Server running at http://localhost:${port}`;
-  console.log(msg);
-  await logToFile(msg);
-  await open(`http://localhost:${port}`);
-});
+  const msg = `🚀 Server running at http://localhost:${port}`
+  console.log(msg)
+  await logToFile(msg)
+  await open(`http://localhost:${port}`)
+})

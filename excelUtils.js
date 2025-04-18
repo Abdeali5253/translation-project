@@ -75,111 +75,144 @@
 //   return outputFilePath
 // }
 
+import ExcelJS from 'exceljs'
+import fs from 'fs/promises'
+import path from 'path'
 
-import ExcelJS from 'exceljs';
-import fs from 'fs/promises';
-import path from 'path';
+export function parseDialectResponse(text) {
+  return text
+    .trim()
+    .split(/\n{2,}/) // split on two or more newlines
+    .map((block) => {
+      const lines = block
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l !== '')
+      const [question = '', answer = '', hint = '', reasoning = ''] = lines
+      return { question, answer, hint, reasoning }
+    })
+}
 
-/**
- * Reads an Excel file and extracts headers & data
- */
 export const readExcel = async (filePath) => {
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.readFile(filePath);
-  const worksheet = workbook.worksheets[0];
-
+  const workbook = new ExcelJS.Workbook()
+  await workbook.xlsx.readFile(filePath)
+  const worksheet = workbook.worksheets[0]
   // Extract headers from the first row
-  const headers = [];
+  const headers = []
   worksheet.getRow(1).eachCell((cell) => {
-    headers.push(cell.value);
-  });
-
+    headers.push(cell.value)
+  })
   // Extract rows of data
-  const rows = [];
+  const rows = []
   worksheet.eachRow((row, rowNumber) => {
-    if (rowNumber > 1) {  // Skip the header row
-      const rowData = {};
+    if (rowNumber > 1) {
+      // Skip the header row
+      const rowData = {}
       headers.forEach((header, index) => {
-        rowData[header] = row.getCell(index + 1).value;
-      });
-      rows.push(rowData);
+        rowData[header] = row.getCell(index + 1).value
+      })
+      rows.push(rowData)
     }
-  });
+  })
+  return { headers, rows }
+}
 
-  return { headers, rows };
-};
+// export const generateExcel = async (
+//   headers,
+//   rows,
+//   originalFileName,
+//   translationMode
+// ) => {
+//   const workbook = new ExcelJS.Workbook()
+//   const worksheet = workbook.addWorksheet('Translations')
+//   // Define the required translation headers per mode
+//   let translationHeaders = []
+//   if (translationMode === 'english_to_msa') {
+//     translationHeaders = ['MSA', 'Emirati', 'Egyptian', 'Jordanian']
+//   } else if (translationMode === 'msa_to_other') {
+//     translationHeaders = ['Emirati', 'Egyptian', 'Jordanian']
+//   }
+//   // Normalize base headers (e.g., handle accidental trailing spaces)
+//   const normalizedHeaders = headers.map((h) =>
+//     typeof h === 'string' ? h.trim() : h
+//   )
+//   // Final headers = original headers (normalized) + any new translation headers
+//   const finalHeaders = [
+//     ...normalizedHeaders,
+//     ...translationHeaders.filter((h) => !normalizedHeaders.includes(h)),
+//   ]
+//   worksheet.addRow(finalHeaders)
+//   // Write each row
+//   rows.forEach((rowData) => {
+//     const row = finalHeaders.map((header) => {
+//       const exactMatch = rowData[header]
+//       const fallbackMatch = rowData[header + ' '] || rowData[header.trim()]
+//       return exactMatch ?? fallbackMatch ?? ''
+//     })
+//     worksheet.addRow(row)
+//   })
+//   await fs.mkdir('uploads', { recursive: true })
+//   const timestamp = Date.now()
+//   const safeFileName = originalFileName
+//     .replace(/\.[^/.]+$/, '')
+//     .replace(/\s+/g, '_')
+//     .replace(/[^a-zA-Z0-9_\-]/g, '')
+//   const outputFilePath = path.join(
+//     'uploads',
+//     `${safeFileName}_translated_${timestamp}.xlsx`
+//   )
+//   await workbook.xlsx.writeFile(outputFilePath)
+//   console.log(`Generated translated file at: ${outputFilePath}`)
+//   return outputFilePath
+// }
 
-/**
- * Generates an Excel file with translations
- */
-export const generateExcel = async (headers, rows, originalFileName, translationMode) => {
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet('Translations');
+export const generateExcel = async (
+  /** original headers (ignored) */ _,
+  /** rows: array of objects having keys
+      Question, Answer, Hint, Reasoning,
+      plus e.g. MSA_Question, MSA_Answer…Emirati_Reasoning, etc.
+   */ rows,
+  originalFileName,
+  translationMode // 'english_to_msa' | 'msa_to_other'
+) => {
+  const workbook = new ExcelJS.Workbook()
+  const worksheet = workbook.addWorksheet('Translations')
 
-  // Define the translation headers based on the translation mode
-  let translationHeaders = ['English'];
+  // 1) Base columns
+  const baseCols = ['Question', 'Answer', 'Hint', 'Reasoning']
 
-  if (translationMode === 'english_to_msa') {
-    translationHeaders.push('MSA');
-    // Fill other columns with null values for 'english_to_msa'
-    translationHeaders.push('Emirati', 'Egyptian', 'Jordanian');
-  } else if (translationMode === 'msa_to_other') {
-    translationHeaders = [
-      'MSA',
-      'Emirati',
-      'Egyptian',
-      'Jordanian',
-    ];
-  }
+  // 2) Dialects to include
+  const dialects =
+    translationMode === 'english_to_msa'
+      ? ['MSA', 'Emirati', 'Egyptian', 'Jordanian']
+      : ['Emirati', 'Egyptian', 'Jordanian']
 
-  // Ensure all translation headers are included in the final headers
-  const finalHeaders = [...headers, ...translationHeaders.filter(header => !headers.includes(header))];
+  // 3) Build header row
+  const translationCols = []
+  dialects.forEach((d) => {
+    baseCols.forEach((b) => translationCols.push(`${d}_${b}`))
+  })
+  const finalHeaders = [...baseCols, ...translationCols]
+  worksheet.addRow(finalHeaders)
 
-  // Add final headers to Excel
-  worksheet.addRow(finalHeaders);
-
-  // Add the rows to Excel
+  // 4) Write each data row
   rows.forEach((rowData) => {
-    const row = [];
+    const row = finalHeaders.map((col) => rowData[col] || '')
+    worksheet.addRow(row)
+  })
 
-    // For "English to MSA" mode, only the "MSA" column will be populated
-    if (translationMode === 'english_to_msa') {
-      row.push(rowData['English'] || ''); // English column
-      row.push(rowData['MSA'] || ''); // MSA column (empty if no translation)
-      row.push(null); // Emirati column (empty for English to MSA)
-      row.push(null); // Egyptian column (empty for English to MSA)
-      row.push(null); // Jordanian column (empty for English to MSA)
-    }
-    // For "MSA to other dialects" mode, add translations for each dialect
-    else if (translationMode === 'msa_to_other') {
-      row.push(rowData['MSA'] || ''); // MSA column
-      row.push(rowData['Emirati'] || ''); // Emirati translation
-      row.push(rowData['Egyptian'] || ''); // Egyptian translation
-      row.push(rowData['Jordanian'] || ''); // Jordanian translation
-    }
-
-    // Add the populated row to the Excel sheet
-    worksheet.addRow(row);
-  });
-
-  // Ensure the upload folder exists
-  await fs.mkdir('uploads', { recursive: true });
-
-  // Generate a safe file name and output path
-  const timestamp = Date.now();
-  const safeFileName = originalFileName
-    .replace(/\.[^/.]+$/, '') // remove extension
+  // 5) Save to disk
+  await fs.mkdir('uploads', { recursive: true })
+  const timestamp = Date.now()
+  const safeName = originalFileName
+    .replace(/\.[^/.]+$/, '')
     .replace(/\s+/g, '_')
-    .replace(/[^a-zA-Z0-9_\-]/g, ''); // Clean up file name
-
-  const outputFilePath = path.join(
+    .replace(/[^a-zA-Z0-9_\-]/g, '')
+  const outPath = path.join(
     'uploads',
-    `${safeFileName}_translated_${timestamp}.xlsx`
-  );
-
-  // Write the workbook to the file
-  await workbook.xlsx.writeFile(outputFilePath);
-
-  console.log(`Generated translated file at: ${outputFilePath}`);
-  return outputFilePath;
-};
+    `${safeName}_translated_${timestamp}.xlsx`
+  )
+  await workbook.xlsx.writeFile(outPath)
+  console.log(`Generated translated file at: ${outPath}`)
+  return outPath
+}

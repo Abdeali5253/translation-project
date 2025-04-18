@@ -105,10 +105,14 @@
 //   return result.choices[0].message.content.trim()
 // }
 
-
 import fetch from 'node-fetch'
 import OpenAI from 'openai'
-import { baseUrlDev, baseUrlProd, modelConfigs } from './config.js'
+import {
+  baseUrlDev,
+  baseUrlProd,
+  baseUrlMistral,
+  modelConfigs,
+} from './config.js'
 
 const openai = new OpenAI({ apiKey: modelConfigs.openai.apiKey })
 
@@ -138,7 +142,7 @@ export const translateWithModel = async (modelName, messages) => {
   // Mistral 1: Direct API call (production)
   if (modelName === 'mistral_1') {
     try {
-      const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+      const response = await fetch(baseUrlMistral + '/chat/completions', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${config.apiKey}`,
@@ -161,7 +165,11 @@ export const translateWithModel = async (modelName, messages) => {
 
       const result = await response.json()
       console.log('Mistral 1 API Response:', result) // Log the full Mistral response
-      if (!result.choices || !Array.isArray(result.choices) || result.choices.length === 0) {
+      if (
+        !result.choices ||
+        !Array.isArray(result.choices) ||
+        result.choices.length === 0
+      ) {
         console.error('Mistral 1 API Error: No choices returned:', result)
         throw new Error('No choices returned from Mistral 1 API')
       }
@@ -174,9 +182,13 @@ export const translateWithModel = async (modelName, messages) => {
   }
 
   // Mistral 2: Use Dev Base URL
-  if (modelName === 'mistral_2') {
+  if (
+    modelName === 'gemma' ||
+    modelName === 'meta_1' ||
+    modelName === 'meta_3' 
+  ) {
     try {
-      const response = await fetch(baseUrlDev + 'v1/chat/completions', {
+      const response = await fetch(baseUrlDev + '/chat/completions', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${config.apiKey}`,
@@ -193,26 +205,30 @@ export const translateWithModel = async (modelName, messages) => {
 
       if (!response.ok) {
         const errorDetails = await response.json()
-        console.error('Mistral 2 API Error:', errorDetails) // Log Mistral 2 API error details
-        throw new Error(`Mistral 2 API error: ${response.statusText}`)
+        console.error(`${modelName} API Error:`, errorDetails) // Log Mistral 2 API error details
+        throw new Error(`${modelName} API error: ${response.statusText}`)
       }
 
       const result = await response.json()
-      console.log('Mistral 2 API Response:', result) // Log the full Mistral 2 response
-      if (!result.choices || !Array.isArray(result.choices) || result.choices.length === 0) {
-        console.error('Mistral 2 API Error: No choices returned:', result)
+      console.log(`${modelName} API Response:`, result) // Log the full Mistral 2 response
+      if (
+        !result.choices ||
+        !Array.isArray(result.choices) ||
+        result.choices.length === 0
+      ) {
+        console.error(`${modelName} 2 API Error: No choices returned:`, result)
         throw new Error('No choices returned from Mistral 2 API')
       }
 
       return result.choices[0].message.content.trim()
     } catch (error) {
-      console.error('Error calling Mistral 2 API:', error) // Log Mistral 2 API errors
+      console.error(`Error calling ${modelName} API:`, error) // Log Mistral 2 API errors
       throw error
     }
   }
 
   // For other models (production base URL)
-  const response = await fetch(baseUrlProd + 'v1/chat/completions', {
+  const response = await fetch(baseUrlProd + '/chat/completions', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${config.apiKey}`,
@@ -232,7 +248,11 @@ export const translateWithModel = async (modelName, messages) => {
 
   const result = await response.json()
   console.log(`${modelName} API Response:`, result) // Log the full response
-  if (!result.choices || !Array.isArray(result.choices) || result.choices.length === 0) {
+  if (
+    !result.choices ||
+    !Array.isArray(result.choices) ||
+    result.choices.length === 0
+  ) {
     console.error(`${modelName} API Error: No choices returned:`, result)
     throw new Error(`No choices returned for model ${modelName}`)
   }
