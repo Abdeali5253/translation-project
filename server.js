@@ -353,37 +353,49 @@ app.post('/upload', upload.single('file'), async (req, res) => {
         }
       }
     } else if (translationMode === 'msa_to_other') {
-      // Translate MSA to other dialects (Emirati, Egyptian, Jordanian)
-      for (let i = 0; i < rows.length; i++) {
-        if (rows[i]['MSA']) {
-          const msaText = rows[i]['MSA']
-          const batchIndexes = [i]
-          for (const dialect of ['emirati', 'egyptian', 'jordanian']) {
-            const prompt = generatePrompt(msaText, dialect)
-            //await logToFile(`Generated ${dialect} Prompt:\n${prompt}`)
-            console.log(`Generated ${dialect} Prompt:`, prompt) // Debug log
-            await logToFile(`${dialect} Generated Prompt:\n ${prompt}`)
-            const response = await translateWithModel(selectedModel, [
-              { role: 'user', content: prompt },
-            ])
-            await logToFile(`${dialect} API Response:\n${response}`)
-            console.log(`${dialect} API Response:`, response) // Debug log
+      const batchSize = 8
+      // collect only rows that actually have MSA text
+      const msaRows = rows
+        .map((r, i) => ({ text: r.MSA, idx: i }))
+        .filter((r) => r.text)
+      const totalBatches = Math.ceil(msaRows.length / batchSize)
 
-            if (!response || response.trim() === '') {
-              console.error(`No response received for ${dialect} translation.`)
-              throw new Error(
-                `No response received for ${dialect} translation.`
-              )
-            }
+      let batchNum = 0
+      for (let b = 0; b < msaRows.length; b += batchSize) {
+        const slice = msaRows.slice(b, b + batchSize)
+        const texts = slice.map((r) => r.text)
+        const indexes = slice.map((r) => r.idx)
 
-            const dialectTranslation = parseTranslations(response)
-            rows[batchIndexes[0]][dialect] =
-              dialectTranslation[dialect] || 'No translation'
+        emitProgress(
+          `Translating batch ${
+            batchNum + 1
+          } of ${totalBatches} for other dialects...`,
+          30 + Math.round((batchNum / totalBatches) * 50)
+        )
+
+        for (const dialect of ['emirati', 'egyptian', 'jordanian']) {
+          const prompt = generatePrompt(texts.join('\n'), dialect)
+          await logToFile(`Generated ${dialect} Prompt:\n${prompt}`)
+
+          const response = await translateWithModel(selectedModel, [
+            { role: 'user', content: prompt },
+          ])
+          await logToFile(`${dialect} API Response:\n${response}`)
+
+          if (!response || response.trim() === '') {
+            throw new Error(`No response received for ${dialect} translation.`)
           }
+
+          const translations = parseTranslations(response)
+          // apply each translation in the batch back to its row
+          translations.forEach((t, i) => {
+            rows[indexes[i]][dialect] = t[dialect] || 'No translation'
+          })
         }
+
+        batchNum++
       }
     }
-
     emitProgress('Generating translated file...', 90)
     const outputFilePath = await generateExcel(
       headers,

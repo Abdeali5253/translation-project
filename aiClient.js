@@ -140,52 +140,131 @@ export const translateWithModel = async (modelName, messages) => {
   }
 
   // Mistral 1: Direct API call (production)
+  // if (modelName === 'mistral_1') {
+  //   try {
+  //     const response = await fetch(baseUrlMistral + '/chat/completions', {
+  //       method: 'POST',
+  //       headers: {
+  //         Authorization: `Bearer ${config.apiKey}`,
+  //         'Content-Type': 'application/json',
+  //       },
+  //       body: JSON.stringify({
+  //         model: config.model,
+  //         messages: messages,
+  //         temperature: 0.7,
+  //         top_p: 1,
+  //         stream: false,
+  //       }),
+  //     })
+
+  //     if (!response.ok) {
+  //       const errorDetails = await response.json()
+  //       console.error('Mistral 1 API Error:', errorDetails) // Log Mistral API error details
+  //       throw new Error(`Mistral 1 API error: ${response.statusText}`)
+  //     }
+
+  //     const result = await response.json()
+  //     console.log('Mistral 1 API Response:', result) // Log the full Mistral response
+  //     if (
+  //       !result.choices ||
+  //       !Array.isArray(result.choices) ||
+  //       result.choices.length === 0
+  //     ) {
+  //       console.error('Mistral 1 API Error: No choices returned:', result)
+  //       throw new Error('No choices returned from Mistral 1 API')
+  //     }
+
+  //     return result.choices[0].message.content.trim()
+  //   } catch (error) {
+  //     console.error('Error calling Mistral 1 API:', error) // Log Mistral API errors
+  //     throw error
+  //   }
+  // }
+
   if (modelName === 'mistral_1') {
-    try {
-      const response = await fetch(baseUrlMistral + '/chat/completions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${config.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: config.model,
-          messages: messages,
-          temperature: 0.7,
-          top_p: 1,
-          stream: false,
-        }),
-      })
+    const maxRetries = 5
+    let attempt = 0
+    let delay = 1500 // ms, start with 1.5s, adjust as needed
 
-      if (!response.ok) {
-        const errorDetails = await response.json()
-        console.error('Mistral 1 API Error:', errorDetails) // Log Mistral API error details
-        throw new Error(`Mistral 1 API error: ${response.statusText}`)
+    while (attempt < maxRetries) {
+      try {
+        const response = await fetch(baseUrlMistral + '/chat/completions', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${config.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: config.model,
+            messages: messages,
+            temperature: 0.7,
+            top_p: 1,
+            stream: false,
+          }),
+        })
+
+        if (!response.ok) {
+          const errorDetails = await response.json().catch(() => ({}))
+          console.error('Mistral 1 API Error:', errorDetails)
+
+          // Retry only for rate limit (429)
+          if (response.status === 429) {
+            attempt++
+            console.warn(
+              `Mistral 1 API rate limited (attempt ${attempt}/${maxRetries}). Retrying in ${delay}ms...`
+            )
+            await new Promise((res) => setTimeout(res, delay))
+            delay *= 2 // exponential backoff
+            continue
+          }
+
+          throw new Error(
+            `Mistral 1 API error: ${response.statusText} (status ${response.status})`
+          )
+        }
+
+        const result = await response.json()
+        console.log('Mistral 1 API Response:', result)
+        if (
+          !result.choices ||
+          !Array.isArray(result.choices) ||
+          result.choices.length === 0
+        ) {
+          console.error('Mistral 1 API Error: No choices returned:', result)
+          throw new Error('No choices returned from Mistral 1 API')
+        }
+
+        return result.choices[0].message.content.trim()
+      } catch (error) {
+        // Retry only for rate limit errors
+        if (
+          error.message &&
+          error.message.toLowerCase().includes('too many requests') &&
+          attempt < maxRetries
+        ) {
+          attempt++
+          console.warn(
+            `Mistral 1 API rate limited (attempt ${attempt}/${maxRetries}). Retrying in ${delay}ms...`
+          )
+          await new Promise((res) => setTimeout(res, delay))
+          delay *= 2 // exponential backoff
+          continue
+        }
+        console.error('Error calling Mistral 1 API:', error)
+        throw error
       }
-
-      const result = await response.json()
-      console.log('Mistral 1 API Response:', result) // Log the full Mistral response
-      if (
-        !result.choices ||
-        !Array.isArray(result.choices) ||
-        result.choices.length === 0
-      ) {
-        console.error('Mistral 1 API Error: No choices returned:', result)
-        throw new Error('No choices returned from Mistral 1 API')
-      }
-
-      return result.choices[0].message.content.trim()
-    } catch (error) {
-      console.error('Error calling Mistral 1 API:', error) // Log Mistral API errors
-      throw error
     }
+
+    throw new Error(
+      `Mistral 1 API error: Rate limit exceeded after ${maxRetries} attempts`
+    )
   }
 
   // Mistral 2: Use Dev Base URL
   if (
     modelName === 'gemma' ||
     modelName === 'meta_1' ||
-    modelName === 'meta_3' 
+    modelName === 'meta_3'
   ) {
     try {
       const response = await fetch(baseUrlDev + '/chat/completions', {
